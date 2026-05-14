@@ -13,6 +13,7 @@ final class RadarPreset {
     final double minY;
     final double maxX;
     final double maxY;
+    final double aspectRatio;
     final int lookbackMinutes;
     final int periodMinutes;
 
@@ -38,6 +39,7 @@ final class RadarPreset {
         this.maxX = lonToMercatorX(eastLng);
         this.minY = latToMercatorY(southLat);
         this.maxY = latToMercatorY(northLat);
+        this.aspectRatio = (this.maxX - this.minX) / (this.maxY - this.minY);
         this.lookbackMinutes = 180;
         this.periodMinutes = 15;
     }

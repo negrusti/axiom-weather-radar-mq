@@ -151,28 +151,6 @@
             android:layout_height="wrap_content"
             android:layout_weight="1" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:text="Speed"
-            android:textColor="#1D609A"
-            android:textSize="18sp" />
-
-        <SeekBar
-            android:id="@+id/speedSlider"
-            android:layout_width="140dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp" />
-
-        <TextView
-            android:id="@+id/speedValue"
-            android:layout_width="52dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
-            android:text="1.0x"
-            android:textColor="#1D609A"
-            android:textSize="18sp" />
     </LinearLayout>
 
     <LinearLayout

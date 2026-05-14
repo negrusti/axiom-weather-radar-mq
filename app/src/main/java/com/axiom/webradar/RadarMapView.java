@@ -200,21 +200,38 @@ public final class RadarMapView extends View {
 
     @Nullable
     private RectF currentDrawRect() {
-        Bitmap reference = referenceBitmap();
-        if (reference == null || getWidth() <= 0 || getHeight() <= 0) {
+        if (getWidth() <= 0 || getHeight() <= 0) {
             return null;
         }
 
-        float fitScale = Math.min(
-                (float) getWidth() / (float) reference.getWidth(),
-                (float) getHeight() / (float) reference.getHeight()
-        );
-        float scale = fitScale * userScale;
-        float drawWidth = reference.getWidth() * scale;
-        float drawHeight = reference.getHeight() * scale;
+        float contentAspect = contentAspectRatio();
+        float viewAspect = (float) getWidth() / (float) getHeight();
+
+        float drawWidth;
+        float drawHeight;
+        if (contentAspect >= viewAspect) {
+            drawWidth = getWidth() * userScale;
+            drawHeight = drawWidth / contentAspect;
+        } else {
+            drawHeight = getHeight() * userScale;
+            drawWidth = drawHeight * contentAspect;
+        }
+
         float left = (getWidth() - drawWidth) * 0.5f + panX;
         float top = (getHeight() - drawHeight) * 0.5f + panY;
         return new RectF(left, top, left + drawWidth, top + drawHeight);
+    }
+
+    private float contentAspectRatio() {
+        if (preset != null && preset.aspectRatio > 0.0d) {
+            return (float) preset.aspectRatio;
+        }
+
+        Bitmap reference = referenceBitmap();
+        if (reference != null && reference.getHeight() > 0) {
+            return (float) reference.getWidth() / (float) reference.getHeight();
+        }
+        return 1.0f;
     }
 
     @Nullable
@@ -229,19 +246,21 @@ public final class RadarMapView extends View {
     }
 
     private void clampPan() {
-        Bitmap reference = referenceBitmap();
-        if (reference == null || getWidth() <= 0 || getHeight() <= 0) {
+        if (getWidth() <= 0 || getHeight() <= 0) {
             panX = 0.0f;
             panY = 0.0f;
             return;
         }
 
-        float fitScale = Math.min(
-                (float) getWidth() / (float) reference.getWidth(),
-                (float) getHeight() / (float) reference.getHeight()
-        );
-        float drawWidth = reference.getWidth() * fitScale * userScale;
-        float drawHeight = reference.getHeight() * fitScale * userScale;
+        RectF drawRect = currentDrawRect();
+        if (drawRect == null) {
+            panX = 0.0f;
+            panY = 0.0f;
+            return;
+        }
+
+        float drawWidth = drawRect.width();
+        float drawHeight = drawRect.height();
 
         float maxPanX = Math.max(0.0f, (drawWidth - getWidth()) * 0.5f);
         float maxPanY = Math.max(0.0f, (drawHeight - getHeight()) * 0.5f);

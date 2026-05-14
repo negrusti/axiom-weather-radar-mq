@@ -30,10 +30,13 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,14 +49,17 @@ public class MainActivity extends AppCompatActivity {
     private static final String CONTOUR_BASE_URL = "https://rwg.meteofrance.com/geoservices/CCG-mapcache-WMS?service=WMS&request=GetMap&transparent=TRUE";
     private static final long LOCATION_MIN_TIME_MS = 5L * 60L * 1000L;
     private static final float LOCATION_MIN_DISTANCE_METERS = 25.0f;
-    private static final int MIN_REQUEST_WIDTH = 1024;
-    private static final int MIN_REQUEST_HEIGHT = 768;
+    private static final int MIN_REQUEST_WIDTH = 1600;
+    private static final int MIN_REQUEST_HEIGHT = 1200;
+    private static final int MAX_REQUEST_WIDTH = 2200;
+    private static final int MAX_REQUEST_HEIGHT = 2200;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService networkExecutor = Executors.newFixedThreadPool(3);
     private final SimpleDateFormat displayTimeFormat = new SimpleDateFormat("M/d/yyyy, h:mm:ss a", Locale.US);
     private final SimpleDateFormat wmsTimeFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
     private final List<RadarPreset> presets = new ArrayList<>();
+    private final Set<String> inFlightKeys = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private final LruCache<String, Bitmap> bitmapCache = new LruCache<String, Bitmap>(32 * 1024) {
         @Override
         protected int sizeOf(@NonNull String key, @NonNull Bitmap value) {
@@ -97,9 +103,7 @@ public class MainActivity extends AppCompatActivity {
     private View loadingOverlay;
     private TextView loadingText;
     private TextView timeLabel;
-    private TextView speedValue;
     private SeekBar frameSlider;
-    private SeekBar speedSlider;
     private Button playButton;
     private Button presetAntillesButton;
     private Button preset200Button;
@@ -177,9 +181,7 @@ public class MainActivity extends AppCompatActivity {
         loadingOverlay = findViewById(R.id.loadingOverlay);
         loadingText = findViewById(R.id.loadingText);
         timeLabel = findViewById(R.id.timeLabel);
-        speedValue = findViewById(R.id.speedValue);
         frameSlider = findViewById(R.id.timelineSlider);
-        speedSlider = findViewById(R.id.speedSlider);
         playButton = findViewById(R.id.playButton);
         presetAntillesButton = findViewById(R.id.presetAntillesButton);
         preset200Button = findViewById(R.id.preset200Button);
@@ -242,27 +244,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 refreshCurrentPreset();
-            }
-        });
-
-        speedSlider.setMax(7);
-        speedSlider.setProgress(1);
-        updateSpeedLabel();
-        speedSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateSpeedLabel();
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                if (playing) {
-                    restartPlayback();
-                }
             }
         });
 
@@ -399,6 +380,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                 );
                 loadRadarFrame(showLoading);
+                prefetchRadarFrames();
             }
         });
     }
@@ -442,8 +424,9 @@ public class MainActivity extends AppCompatActivity {
         if (currentPreset == null || frameTimes.isEmpty()) {
             return;
         }
+        final RadarPreset preset = currentPreset;
         final Date frameTime = frameTimes.get(currentFrameIndex);
-        final String radarKey = radarFrameKey(currentPreset, frameTime);
+        final String radarKey = radarFrameKey(preset, frameTime);
         activeRadarKey = radarKey;
         updateFrameSlider();
         updateTimeLabel();
@@ -457,24 +440,70 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        fetchRadarFrame(preset, frameTime, showLoading, true);
+    }
+
+    private void prefetchRadarFrames() {
+        if (currentPreset == null || frameTimes.isEmpty()) {
+            return;
+        }
+
+        final RadarPreset preset = currentPreset;
+        final int selectedIndex = currentFrameIndex;
+
+        for (int offset = 1; offset < frameTimes.size(); offset++) {
+            int forwardIndex = selectedIndex + offset;
+            if (forwardIndex < frameTimes.size()) {
+                fetchRadarFrame(preset, frameTimes.get(forwardIndex), false, false);
+            }
+
+            int backwardIndex = selectedIndex - offset;
+            if (backwardIndex >= 0) {
+                fetchRadarFrame(preset, frameTimes.get(backwardIndex), false, false);
+            }
+        }
+    }
+
+    private void fetchRadarFrame(
+            @NonNull final RadarPreset preset,
+            @NonNull final Date frameTime,
+            final boolean showLoading,
+            final boolean updateVisibleLayer
+    ) {
+        final String radarKey = radarFrameKey(preset, frameTime);
+        Bitmap cached = bitmapCache.get(radarKey);
+        if (cached != null) {
+            if (updateVisibleLayer && radarKey.equals(activeRadarKey)) {
+                radarView.setRadarBitmap(cached);
+                if (showLoading) {
+                    showLoadingMessage("", false);
+                }
+            }
+            return;
+        }
+        if (!inFlightKeys.add(radarKey)) {
+            return;
+        }
+
         networkExecutor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    final Bitmap bitmap = fetchBitmap(buildRadarUrl(currentPreset, frameTime));
+                    final Bitmap bitmap = fetchBitmap(buildRadarUrl(preset, frameTime));
                     if (bitmap != null) {
                         bitmapCache.put(radarKey, bitmap);
                     }
                     mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            if (destroyed || !radarKey.equals(activeRadarKey)) {
+                            inFlightKeys.remove(radarKey);
+                            if (destroyed) {
                                 return;
                             }
-                            if (bitmap != null) {
+                            if (radarKey.equals(activeRadarKey) && bitmap != null) {
                                 radarView.setRadarBitmap(bitmap);
                             }
-                            if (showLoading) {
+                            if (showLoading && radarKey.equals(activeRadarKey)) {
                                 showLoadingMessage("", false);
                             }
                         }
@@ -483,10 +512,13 @@ public class MainActivity extends AppCompatActivity {
                     mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            if (destroyed || !radarKey.equals(activeRadarKey)) {
+                            inFlightKeys.remove(radarKey);
+                            if (destroyed) {
                                 return;
                             }
-                            showLoadingMessage("Unable to load radar frame.", true);
+                            if (showLoading && radarKey.equals(activeRadarKey)) {
+                                showLoadingMessage("Unable to load radar frame.", true);
+                            }
                         }
                     });
                 }
@@ -592,27 +624,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void restartPlayback() {
-        if (!playing) {
-            return;
-        }
-        setPlaying(true);
-    }
-
     private void stopPlayback() {
         setPlaying(false);
     }
 
     private long playbackDelayMs() {
-        return Math.max(250L, Math.round(1100.0d / currentSpeedMultiplier()));
-    }
-
-    private double currentSpeedMultiplier() {
-        return 0.5d + (speedSlider.getProgress() * 0.5d);
-    }
-
-    private void updateSpeedLabel() {
-        speedValue.setText(String.format(Locale.US, "%.1fx", currentSpeedMultiplier()));
+        return 1000L;
     }
 
     private void updateFrameSlider() {
@@ -648,11 +665,40 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int requestWidth() {
-        return Math.max(radarView.getWidth(), MIN_REQUEST_WIDTH);
+        if (currentPreset == null) {
+            return MIN_REQUEST_WIDTH;
+        }
+
+        int targetWidth = Math.max(radarView.getWidth() * 2, MIN_REQUEST_WIDTH);
+        int targetHeight = Math.max(radarView.getHeight() * 2, MIN_REQUEST_HEIGHT);
+
+        double aspect = currentPreset.aspectRatio;
+        int widthFromHeight = (int) Math.round(targetHeight * aspect);
+        int heightFromWidth = (int) Math.round(targetWidth / aspect);
+
+        if (widthFromHeight >= targetWidth) {
+            targetWidth = widthFromHeight;
+        } else {
+            targetHeight = heightFromWidth;
+        }
+
+        if (targetWidth > MAX_REQUEST_WIDTH) {
+            targetWidth = MAX_REQUEST_WIDTH;
+            targetHeight = (int) Math.round(targetWidth / aspect);
+        }
+        if (targetHeight > MAX_REQUEST_HEIGHT) {
+            targetHeight = MAX_REQUEST_HEIGHT;
+            targetWidth = (int) Math.round(targetHeight * aspect);
+        }
+
+        return Math.max(targetWidth, 1);
     }
 
     private int requestHeight() {
-        return Math.max(radarView.getHeight(), MIN_REQUEST_HEIGHT);
+        if (currentPreset == null) {
+            return MIN_REQUEST_HEIGHT;
+        }
+        return Math.max((int) Math.round(requestWidth() / currentPreset.aspectRatio), 1);
     }
 
     private String buildBaseUrl(@NonNull RadarPreset preset) {
