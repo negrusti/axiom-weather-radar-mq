@@ -27,14 +27,7 @@ body {
     z-index: 1000;
 }
 
-.toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
 .preset-buttons,
-.toolbar-left,
 .bottom-panel {
     pointer-events: auto;
 }
@@ -59,22 +52,6 @@ body {
 }
 
 .preset-button.active {
-    background: #1b64a0;
-    color: #ffffff;
-}
-
-.gps-button {
-    border: 0;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.84);
-    box-shadow: 0 4px 16px rgba(26, 67, 104, 0.28);
-    color: #16598f;
-    font-size: 17px;
-    padding: 12px 16px;
-    min-width: 118px;
-}
-
-.gps-button.active {
     background: #1b64a0;
     color: #ffffff;
 }
@@ -193,22 +170,11 @@ body {
         flex-wrap: wrap;
     }
 
-    .toolbar-left {
-        flex-wrap: wrap;
-    }
-
     .preset-button {
         min-width: 0;
         flex: 1 1 0;
         font-size: 16px;
         padding: 9px 12px;
-    }
-
-    .gps-button {
-        min-width: 0;
-        flex: 1 1 0;
-        padding: 10px 12px;
-        font-size: 16px;
     }
 
     .bottom-panel {

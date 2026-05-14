@@ -19,16 +19,11 @@
         tokenRefreshPending: false,
         gpsPosition: null,
         gpsMarker: null,
-        gpsCircle: null,
-        followGps: true,
-        gpsStatusMessage: "Follow GPS",
-        programmaticMoveUntil: 0,
-        userInteractingUntil: 0
+        gpsCircle: null
     };
 
     var elements = {
         presetButtons: document.getElementById("presetButtons"),
-        gpsButton: document.getElementById("gpsButton"),
         timeLabel: document.getElementById("timeLabel"),
         timelineSlider: document.getElementById("timelineSlider"),
         speedSlider: document.getElementById("speedSlider"),
@@ -128,22 +123,6 @@
                 state.map.invalidateSize();
             }
         });
-
-        state.map.on("movestart zoomstart", function () {
-            if (Date.now() < state.programmaticMoveUntil) {
-                return;
-            }
-            state.userInteractingUntil = Date.now() + 30000;
-        });
-    }
-
-    function updateGpsButton() {
-        elements.gpsButton.classList.toggle("active", state.followGps);
-        if (!state.gpsPosition) {
-            elements.gpsButton.textContent = state.gpsStatusMessage;
-            return;
-        }
-        elements.gpsButton.textContent = state.followGps ? "Following GPS" : "Follow GPS";
     }
 
     function isCompactLayout() {
@@ -260,30 +239,6 @@
             state.gpsCircle.setLatLng(latLng);
             state.gpsCircle.setRadius(Math.max(accuracy, 8));
         }
-
-        if (state.followGps && shouldPanToGps(latLng)) {
-            state.programmaticMoveUntil = Date.now() + 1500;
-            state.map.panTo(latLng, { animate: true, duration: 0.35 });
-        }
-    }
-
-    function shouldPanToGps(latLng) {
-        var now;
-        var bounds;
-        var innerBounds;
-
-        if (!state.followGps || !state.map) {
-            return false;
-        }
-
-        now = Date.now();
-        if (now < state.userInteractingUntil) {
-            return false;
-        }
-
-        bounds = state.map.getBounds();
-        innerBounds = bounds.pad(-0.35);
-        return !innerBounds.contains(latLng);
     }
 
     function renderPresetButtons() {
@@ -371,7 +326,6 @@
         updatePresetButtonState();
         drawCurrentFrame();
         updateGpsLayer();
-        updateGpsButton();
         setStatus("Live radar ready.");
     }
 
@@ -489,26 +443,12 @@
             }
         };
 
-        elements.gpsButton.onclick = function () {
-            state.followGps = !state.followGps;
-            updateGpsButton();
-            if (!state.gpsPosition) {
-                var bridge = nativeBridge();
-                if (bridge && typeof bridge.requestLocationPermission === "function") {
-                    bridge.requestLocationPermission();
-                }
-                return;
-            }
-            updateGpsLayer();
-        };
-
         elements.speedValue.textContent = parseFloat(elements.speedSlider.value).toFixed(1) + "x";
     }
 
     function initialize() {
         bindControls();
         scheduleTokenRefresh();
-        updateGpsButton();
         notifyViewerReady();
     }
 
@@ -540,14 +480,11 @@
 
         updateGpsPosition: function (gpsJson) {
             state.gpsPosition = JSON.parse(gpsJson);
-            state.gpsStatusMessage = "GPS ready";
             updateGpsLayer();
-            updateGpsButton();
         },
 
         setGpsStatus: function (message) {
-            state.gpsStatusMessage = message;
-            updateGpsButton();
+            setStatus(message);
         }
     };
 }());

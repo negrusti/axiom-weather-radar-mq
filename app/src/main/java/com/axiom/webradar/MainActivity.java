@@ -270,13 +270,10 @@ public class MainActivity extends AppCompatActivity {
         if (location.getTime() <= lastKnownLocation.getTime()) {
             return false;
         }
-        if (location.distanceTo(lastKnownLocation) >= 10.0f) {
-            return true;
+        if ((location.getTime() - lastKnownLocation.getTime()) < LOCATION_MIN_TIME_MS) {
+            return false;
         }
-        if (location.hasAccuracy() && lastKnownLocation.hasAccuracy()) {
-            return location.getAccuracy() < lastKnownLocation.getAccuracy();
-        }
-        return false;
+        return true;
     }
 
     private boolean hasLocationPermission() {
