@@ -9,8 +9,7 @@
     <title>Axiom Web Radar</title>
     <link
         rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        crossorigin=""
+        href="vendor/leaflet/leaflet.css"
     >
     <link rel="stylesheet" href="radar_viewer.css">
 </head>
@@ -22,7 +21,6 @@
             <div id="presetButtons" class="preset-buttons"></div>
             <button id="gpsButton" class="gps-button" type="button">Follow GPS</button>
         </div>
-        <div id="statusBadge" class="status-badge">Waiting for radar session...</div>
     </div>
 
     <div class="bottom-panel">
@@ -43,7 +41,7 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
     <script src="radar_viewer.js"></script>
 </body>
 </html>

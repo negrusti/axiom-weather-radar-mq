@@ -44,8 +44,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String SESSION_PAGE_URL = "https://meteofrance.mq/fr/images-radar/50km";
     private static final String VIEWER_URL = "file:///android_asset/radar_viewer.html";
     private static final String JS_BOOTSTRAP_FN = "window.AxiomRadar && window.AxiomRadar.bootstrap";
-    private static final long LOCATION_MIN_TIME_MS = 2000L;
-    private static final float LOCATION_MIN_DISTANCE_METERS = 3.0f;
+    private static final long LOCATION_MIN_TIME_MS = 5L * 60L * 1000L;
+    private static final float LOCATION_MIN_DISTANCE_METERS = 25.0f;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -53,6 +53,9 @@ public class MainActivity extends AppCompatActivity {
     private final LocationListener locationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
+            if (!shouldAcceptLocation(location)) {
+                return;
+            }
             lastKnownLocation = location;
             deliverLocationIfReady();
         }
@@ -255,6 +258,25 @@ public class MainActivity extends AppCompatActivity {
         } catch (JSONException ignored) {
             notifyViewerLocationStatus("Failed to encode GPS position.");
         }
+    }
+
+    private boolean shouldAcceptLocation(@Nullable Location location) {
+        if (location == null) {
+            return false;
+        }
+        if (lastKnownLocation == null) {
+            return true;
+        }
+        if (location.getTime() <= lastKnownLocation.getTime()) {
+            return false;
+        }
+        if (location.distanceTo(lastKnownLocation) >= 10.0f) {
+            return true;
+        }
+        if (location.hasAccuracy() && lastKnownLocation.hasAccuracy()) {
+            return location.getAccuracy() < lastKnownLocation.getAccuracy();
+        }
+        return false;
     }
 
     private boolean hasLocationPermission() {

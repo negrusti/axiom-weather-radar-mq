@@ -21,13 +21,14 @@
         gpsMarker: null,
         gpsCircle: null,
         followGps: true,
-        gpsStatusMessage: "Follow GPS"
+        gpsStatusMessage: "Follow GPS",
+        programmaticMoveUntil: 0,
+        userInteractingUntil: 0
     };
 
     var elements = {
         presetButtons: document.getElementById("presetButtons"),
         gpsButton: document.getElementById("gpsButton"),
-        statusBadge: document.getElementById("statusBadge"),
         timeLabel: document.getElementById("timeLabel"),
         timelineSlider: document.getElementById("timelineSlider"),
         speedSlider: document.getElementById("speedSlider"),
@@ -50,7 +51,6 @@
     }
 
     function setStatus(text) {
-        elements.statusBadge.textContent = text;
         postNativeStatus(text);
     }
 
@@ -115,6 +115,11 @@
             maxBoundsViscosity: 1.0
         });
 
+        state.map.createPane("basePane");
+        state.map.getPane("basePane").style.zIndex = "150";
+        state.map.getPane("tilePane").style.zIndex = "450";
+        state.map.getPane("overlayPane").style.zIndex = "500";
+
         L.control.zoom({ position: "topleft" }).addTo(state.map);
         state.map.attributionControl.setPrefix("Leaflet");
 
@@ -122,6 +127,13 @@
             if (state.map) {
                 state.map.invalidateSize();
             }
+        });
+
+        state.map.on("movestart zoomstart", function () {
+            if (Date.now() < state.programmaticMoveUntil) {
+                return;
+            }
+            state.userInteractingUntil = Date.now() + 30000;
         });
     }
 
@@ -249,9 +261,29 @@
             state.gpsCircle.setRadius(Math.max(accuracy, 8));
         }
 
-        if (state.followGps) {
+        if (state.followGps && shouldPanToGps(latLng)) {
+            state.programmaticMoveUntil = Date.now() + 1500;
             state.map.panTo(latLng, { animate: true, duration: 0.35 });
         }
+    }
+
+    function shouldPanToGps(latLng) {
+        var now;
+        var bounds;
+        var innerBounds;
+
+        if (!state.followGps || !state.map) {
+            return false;
+        }
+
+        now = Date.now();
+        if (now < state.userInteractingUntil) {
+            return false;
+        }
+
+        bounds = state.map.getBounds();
+        innerBounds = bounds.pad(-0.35);
+        return !innerBounds.contains(latLng);
     }
 
     function renderPresetButtons() {
@@ -301,7 +333,8 @@
 
         state.baseOverlay = L.imageOverlay(isCompactLayout() ? preset.mobileSvg : preset.desktopSvg, bounds, {
             opacity: 1.0,
-            interactive: false
+            interactive: false,
+            pane: "basePane"
         }).addTo(state.map);
 
         state.contourLayer = L.tileLayer.wms(wmsUrl(preset.layers.contours.baseUrl), {
