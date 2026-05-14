@@ -1,0 +1,261 @@
+html,
+body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #8bb9d3;
+    color: #15568f;
+    font-family: "Segoe UI", sans-serif;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #8cbcd5 0%, #7eb0cc 100%);
+}
+
+.top-bar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.preset-buttons,
+.toolbar-left,
+.status-badge,
+.bottom-panel {
+    pointer-events: auto;
+}
+
+.preset-buttons {
+    display: inline-flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 4px 16px rgba(26, 67, 104, 0.28);
+}
+
+.preset-button {
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #16598f;
+    font-size: 18px;
+    padding: 10px 18px;
+    min-width: 108px;
+}
+
+.preset-button.active {
+    background: #1b64a0;
+    color: #ffffff;
+}
+
+.gps-button {
+    border: 0;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 4px 16px rgba(26, 67, 104, 0.28);
+    color: #16598f;
+    font-size: 17px;
+    padding: 12px 16px;
+    min-width: 118px;
+}
+
+.gps-button.active {
+    background: #1b64a0;
+    color: #ffffff;
+}
+
+.status-badge {
+    max-width: 34%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 4px 16px rgba(26, 67, 104, 0.28);
+    color: #184d77;
+    font-size: 16px;
+    padding: 12px 18px;
+    text-align: right;
+}
+
+.bottom-panel {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    bottom: 28px;
+    display: grid;
+    grid-template-columns: auto auto minmax(260px, 1fr) minmax(230px, 340px);
+    align-items: center;
+    gap: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 16px rgba(26, 67, 104, 0.3);
+    z-index: 1000;
+}
+
+.playback-buttons,
+.time-label,
+.timeline-block,
+.speed-block {
+    min-height: 78px;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid rgba(21, 86, 143, 0.18);
+}
+
+.playback-buttons {
+    gap: 0;
+}
+
+.icon-button {
+    height: 78px;
+    min-width: 76px;
+    border: 0;
+    border-right: 1px solid rgba(21, 86, 143, 0.18);
+    background: transparent;
+    color: #185e9c;
+    font-size: 22px;
+}
+
+.icon-button:last-child {
+    border-right: 0;
+}
+
+.time-label {
+    justify-content: center;
+    padding: 0 28px;
+    color: #1d609a;
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.timeline-block {
+    padding: 0 18px;
+}
+
+.speed-block {
+    padding: 0 18px;
+    gap: 14px;
+    border-right: 0;
+}
+
+.speed-label,
+.speed-value {
+    color: #1d609a;
+    font-size: 18px;
+    white-space: nowrap;
+}
+
+.speed-value {
+    min-width: 44px;
+    text-align: right;
+}
+
+.range-input {
+    width: 100%;
+    accent-color: #1c6fad;
+}
+
+.leaflet-control-zoom {
+    margin-top: 4px;
+    margin-left: 4px;
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(26, 67, 104, 0.28);
+}
+
+.leaflet-control-zoom a {
+    width: 54px;
+    height: 54px;
+    line-height: 54px;
+    color: #16598f;
+    font-size: 28px;
+}
+
+.leaflet-control-attribution {
+    background: rgba(255, 255, 255, 0.72);
+    color: #1a5e96;
+}
+
+@media (max-width: 900px) {
+    .top-bar {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .status-badge {
+        max-width: none;
+        text-align: left;
+    }
+
+    .preset-buttons {
+        flex-wrap: wrap;
+    }
+
+    .toolbar-left {
+        flex-wrap: wrap;
+    }
+
+    .preset-button {
+        min-width: 0;
+        flex: 1 1 0;
+        font-size: 16px;
+        padding: 9px 12px;
+    }
+
+    .gps-button {
+        min-width: 0;
+        flex: 1 1 0;
+        padding: 10px 12px;
+        font-size: 16px;
+    }
+
+    .bottom-panel {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        grid-template-columns: 1fr;
+    }
+
+    .playback-buttons,
+    .time-label,
+    .timeline-block,
+    .speed-block {
+        min-height: 58px;
+        border-right: 0;
+        border-bottom: 1px solid rgba(21, 86, 143, 0.16);
+    }
+
+    .speed-block {
+        border-bottom: 0;
+    }
+
+    .icon-button {
+        height: 58px;
+        min-width: 0;
+        flex: 1 1 0;
+    }
+
+    .time-label {
+        justify-content: flex-start;
+    }
+}

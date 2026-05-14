@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Axiom Web Radar</string>
+    <string name="loading_message">Starting radar viewer...</string>
+    <string name="location_permission_rationale">Location permission is needed to show the device on the radar map.</string>
+</resources>
