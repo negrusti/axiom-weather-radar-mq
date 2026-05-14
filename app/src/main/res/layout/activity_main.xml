@@ -5,11 +5,175 @@
     android:background="@color/background_dark"
     android:keepScreenOn="true">
 
-    <WebView
-        android:id="@+id/radarWebView"
+    <com.axiom.webradar.RadarMapView
+        android:id="@+id/radarView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/transparent" />
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="60dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="20dp"
+        android:background="#EFFFFFFF"
+        android:elevation="6dp"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/zoomInButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text="+"
+            android:textColor="#16598F"
+            android:textSize="28sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#2216598F" />
+
+        <Button
+            android:id="@+id/zoomOutButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text="-"
+            android:textColor="#16598F"
+            android:textSize="28sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="92dp"
+        android:layout_marginTop="20dp"
+        android:background="#D6FFFFFF"
+        android:elevation="6dp"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <Button
+            android:id="@+id/presetAntillesButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="#00000000"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Antilles"
+            android:textColor="#16598F" />
+
+        <Button
+            android:id="@+id/preset200Button"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="#00000000"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="200 km"
+            android:textColor="#16598F" />
+
+        <Button
+            android:id="@+id/preset50Button"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="#00000000"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="50 km"
+            android:textColor="#16598F" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
+        android:background="#E6FFFFFF"
+        android:elevation="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/prevButton"
+            android:layout_width="62dp"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text="<<"
+            android:textColor="#185E9C"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/playButton"
+            android:layout_width="72dp"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text="Play"
+            android:textColor="#185E9C"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/nextButton"
+            android:layout_width="62dp"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text=">>"
+            android:textColor="#185E9C"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/refreshButton"
+            android:layout_width="62dp"
+            android:layout_height="56dp"
+            android:background="#00000000"
+            android:text="R"
+            android:textColor="#185E9C"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/timeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:text="--"
+            android:textColor="#1D609A"
+            android:textSize="18sp" />
+
+        <SeekBar
+            android:id="@+id/timelineSlider"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="Speed"
+            android:textColor="#1D609A"
+            android:textSize="18sp" />
+
+        <SeekBar
+            android:id="@+id/speedSlider"
+            android:layout_width="140dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp" />
+
+        <TextView
+            android:id="@+id/speedValue"
+            android:layout_width="52dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="1.0x"
+            android:textColor="#1D609A"
+            android:textSize="18sp" />
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/loadingOverlay"

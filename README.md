@@ -5,12 +5,10 @@ Android 6.0+ landscape app that displays the Martinique Meteo France radar in a 
 ## What It Does
 
 - Uses the template Android project and keeps GitHub Actions as the intended build path.
-- Opens a local `WebView` UI for the Antilles mosaic preset.
-- Opens a local `WebView` UI for the Martinique `200 km` preset.
-- Opens a local `WebView` UI for the Martinique `50 km` preset.
-- Provides zoom, previous, play/pause, next, refresh, timeline, and speed controls.
-- Overlays the device GPS position with a marker, accuracy circle, and follow toggle.
-- Bundles Leaflet locally instead of loading it from a remote CDN at startup.
+- Uses a native Android `View` to render the Antilles, Martinique `200 km`, and Martinique `50 km` presets.
+- Draws basemap, contours, radar frame, and GPS marker directly on a `Canvas`.
+- Provides native zoom, pan, previous, play/pause, next, refresh, timeline, and speed controls.
+- Overlays the device GPS position with a passive marker and accuracy circle.
 - Fetches a fresh Meteo France session token at runtime so the protected WMS radar layers can load.
 
 ## Target
