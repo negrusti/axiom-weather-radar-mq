@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -60,10 +61,16 @@ public class MainActivity extends AppCompatActivity {
     private final SimpleDateFormat wmsTimeFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
     private final List<RadarPreset> presets = new ArrayList<>();
     private final Set<String> inFlightKeys = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
-    private final LruCache<String, Bitmap> bitmapCache = new LruCache<String, Bitmap>(32 * 1024) {
+    private final LruCache<String, Bitmap> staticBitmapCache = new LruCache<String, Bitmap>(32 * 1024) {
         @Override
         protected int sizeOf(@NonNull String key, @NonNull Bitmap value) {
             return value.getByteCount() / 1024;
+        }
+    };
+    private final LruCache<String, byte[]> radarDataCache = new LruCache<String, byte[]>(12 * 1024) {
+        @Override
+        protected int sizeOf(@NonNull String key, @NonNull byte[] value) {
+            return value.length / 1024;
         }
     };
     private final LocationListener locationListener = new LocationListener() {
@@ -391,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
             @NonNull final String url,
             @NonNull final BitmapConsumer consumer
     ) {
-        Bitmap cached = bitmapCache.get(cacheKey);
+        Bitmap cached = staticBitmapCache.get(cacheKey);
         if (cached != null) {
             consumer.accept(cached);
             return;
@@ -403,7 +410,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     final Bitmap bitmap = fetchBitmap(url);
                     if (bitmap != null) {
-                        bitmapCache.put(cacheKey, bitmap);
+                        staticBitmapCache.put(cacheKey, bitmap);
                     }
                     mainHandler.post(new Runnable() {
                         @Override
@@ -431,12 +438,9 @@ public class MainActivity extends AppCompatActivity {
         updateFrameSlider();
         updateTimeLabel();
 
-        Bitmap cached = bitmapCache.get(radarKey);
+        byte[] cached = radarDataCache.get(radarKey);
         if (cached != null) {
-            radarView.setRadarBitmap(cached);
-            if (showLoading) {
-                showLoadingMessage("", false);
-            }
+            decodeAndDisplayRadarFrame(radarKey, cached, showLoading);
             return;
         }
 
@@ -471,13 +475,10 @@ public class MainActivity extends AppCompatActivity {
             final boolean updateVisibleLayer
     ) {
         final String radarKey = radarFrameKey(preset, frameTime);
-        Bitmap cached = bitmapCache.get(radarKey);
+        byte[] cached = radarDataCache.get(radarKey);
         if (cached != null) {
-            if (updateVisibleLayer && radarKey.equals(activeRadarKey)) {
-                radarView.setRadarBitmap(cached);
-                if (showLoading) {
-                    showLoadingMessage("", false);
-                }
+            if (updateVisibleLayer) {
+                decodeAndDisplayRadarFrame(radarKey, cached, showLoading);
             }
             return;
         }
@@ -489,9 +490,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    final Bitmap bitmap = fetchBitmap(buildRadarUrl(preset, frameTime));
-                    if (bitmap != null) {
-                        bitmapCache.put(radarKey, bitmap);
+                    final byte[] frameData = fetchBytes(buildRadarUrl(preset, frameTime));
+                    if (frameData != null) {
+                        radarDataCache.put(radarKey, frameData);
                     }
                     mainHandler.post(new Runnable() {
                         @Override
@@ -500,10 +501,11 @@ public class MainActivity extends AppCompatActivity {
                             if (destroyed) {
                                 return;
                             }
-                            if (radarKey.equals(activeRadarKey) && bitmap != null) {
-                                radarView.setRadarBitmap(bitmap);
+                            if (radarKey.equals(activeRadarKey) && frameData != null) {
+                                decodeAndDisplayRadarFrame(radarKey, frameData, showLoading);
+                                return;
                             }
-                            if (showLoading && radarKey.equals(activeRadarKey)) {
+                            if (showLoading && radarKey.equals(activeRadarKey) && frameData != null) {
                                 showLoadingMessage("", false);
                             }
                         }
@@ -522,6 +524,35 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });
                 }
+            }
+        });
+    }
+
+    private void decodeAndDisplayRadarFrame(
+            @NonNull final String radarKey,
+            @NonNull final byte[] frameData,
+            final boolean showLoading
+    ) {
+        networkExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                final Bitmap bitmap = decodeBitmap(frameData);
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (destroyed || !radarKey.equals(activeRadarKey)) {
+                            return;
+                        }
+                        if (bitmap != null) {
+                            radarView.setRadarBitmap(bitmap);
+                            if (showLoading) {
+                                showLoadingMessage("", false);
+                            }
+                        } else if (showLoading) {
+                            showLoadingMessage("Unable to decode radar frame.", true);
+                        }
+                    }
+                });
             }
         });
     }
@@ -768,6 +799,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Bitmap fetchBitmap(@NonNull String urlText) throws IOException {
+        byte[] data = fetchBytes(urlText);
+        return data != null ? decodeBitmap(data) : null;
+    }
+
+    private byte[] fetchBytes(@NonNull String urlText) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) new URL(urlText).openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(15000);
@@ -783,15 +819,26 @@ public class MainActivity extends AppCompatActivity {
 
             InputStream stream = connection.getInputStream();
             try {
-                BitmapFactory.Options options = new BitmapFactory.Options();
-                options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                return BitmapFactory.decodeStream(stream, null, options);
+                ByteArrayOutputStream output = new ByteArrayOutputStream(16 * 1024);
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = stream.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                }
+                return output.toByteArray();
             } finally {
                 stream.close();
             }
         } finally {
             connection.disconnect();
         }
+    }
+
+    @Nullable
+    private Bitmap decodeBitmap(@NonNull byte[] data) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        return BitmapFactory.decodeByteArray(data, 0, data.length, options);
     }
 
     private String fetchSessionToken() throws IOException {
