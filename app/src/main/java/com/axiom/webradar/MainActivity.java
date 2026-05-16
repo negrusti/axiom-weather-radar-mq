@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.content.ComponentCallbacks2;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -26,10 +27,14 @@ import androidx.core.content.ContextCompat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -149,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 initialized = true;
-                selectPreset(findPreset("martinique_50"), true, true, false);
+                selectPreset(findPreset("antilles"), true, true, false);
             }
         });
         ensureLocationAccess();
@@ -173,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
         destroyed = true;
         stopPlayback();
         stopLocationUpdates();
+        clearAllCaches();
         networkExecutor.shutdownNow();
         super.onDestroy();
     }
@@ -181,6 +187,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         enterImmersiveMode();
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        clearAllCaches();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            clearAllCaches();
+        }
     }
 
     private void bindViews() {
@@ -315,18 +335,24 @@ public class MainActivity extends AppCompatActivity {
             boolean resetTransform,
             boolean forceTokenRefresh
     ) {
-        currentPreset = preset;
+        boolean presetChanged = currentPreset == null || !currentPreset.id.equals(preset.id);
         stopPlayback();
+        activeRadarKey = null;
+        radarView.setBaseBitmap(null);
+        radarView.setContourBitmap(null);
+        radarView.setRadarBitmap(null);
+        if (presetChanged) {
+            clearAllCaches();
+        } else {
+            clearRadarCache();
+        }
+        currentPreset = preset;
         rebuildFrameTimes();
         currentFrameIndex = Math.max(frameTimes.size() - 1, 0);
         updatePresetButtons();
         updateFrameSlider();
         updateTimeLabel();
-        activeRadarKey = null;
         radarView.setPreset(preset, resetTransform);
-        radarView.setBaseBitmap(null);
-        radarView.setContourBitmap(null);
-        radarView.setRadarBitmap(null);
         if (lastKnownLocation != null) {
             radarView.setDeviceLocation(lastKnownLocation);
         }
@@ -338,6 +364,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         stopPlayback();
+        activeRadarKey = null;
+        radarView.setRadarBitmap(null);
+        clearRadarCache();
         rebuildFrameTimes();
         currentFrameIndex = Math.max(frameTimes.size() - 1, 0);
         updateFrameSlider();
@@ -364,6 +393,7 @@ public class MainActivity extends AppCompatActivity {
                         generation,
                         staticLayerKey(currentPreset, "dem"),
                         buildBaseUrl(currentPreset),
+                        true,
                         new BitmapConsumer() {
                             @Override
                             public void accept(@Nullable Bitmap bitmap) {
@@ -377,6 +407,7 @@ public class MainActivity extends AppCompatActivity {
                         generation,
                         staticLayerKey(currentPreset, "contour"),
                         buildContourUrl(currentPreset),
+                        false,
                         new BitmapConsumer() {
                             @Override
                             public void accept(@Nullable Bitmap bitmap) {
@@ -396,6 +427,7 @@ public class MainActivity extends AppCompatActivity {
             final int generation,
             @NonNull final String cacheKey,
             @NonNull final String url,
+            final boolean allowDiskCache,
             @NonNull final BitmapConsumer consumer
     ) {
         Bitmap cached = staticBitmapCache.get(cacheKey);
@@ -404,12 +436,25 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (allowDiskCache) {
+            Bitmap persisted = loadPersistedStaticLayer(cacheKey);
+            if (persisted != null) {
+                staticBitmapCache.put(cacheKey, persisted);
+                consumer.accept(persisted);
+                return;
+            }
+        }
+
         networkExecutor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    final Bitmap bitmap = fetchBitmap(url);
-                    if (bitmap != null) {
+                    final byte[] layerData = fetchBytes(url);
+                    if (allowDiskCache && layerData != null) {
+                        persistStaticLayer(cacheKey, layerData);
+                    }
+                    final Bitmap bitmap = layerData != null ? decodeBitmap(layerData) : null;
+                    if (bitmap != null && generation == layerGeneration) {
                         staticBitmapCache.put(cacheKey, bitmap);
                     }
                     mainHandler.post(new Runnable() {
@@ -427,6 +472,59 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    @Nullable
+    private Bitmap loadPersistedStaticLayer(@NonNull String cacheKey) {
+        try {
+            File file = staticLayerCacheFile(cacheKey);
+            if (!file.isFile()) {
+                return null;
+            }
+            byte[] data = readFileBytes(file);
+            return data != null ? decodeBitmap(data) : null;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void persistStaticLayer(@NonNull String cacheKey, @NonNull byte[] data) {
+        try {
+            File file = staticLayerCacheFile(cacheKey);
+            File parent = file.getParentFile();
+            if (parent != null && !parent.isDirectory()) {
+                parent.mkdirs();
+            }
+            FileOutputStream output = new FileOutputStream(file);
+            try {
+                output.write(data);
+            } finally {
+                output.close();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @NonNull
+    private File staticLayerCacheFile(@NonNull String cacheKey) {
+        String safeName = sha1(cacheKey) + ".bin";
+        return new File(new File(getFilesDir(), "static-layer-cache"), safeName);
+    }
+
+    @Nullable
+    private byte[] readFileBytes(@NonNull File file) throws IOException {
+        FileInputStream input = new FileInputStream(file);
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream((int) Math.max(4096L, file.length()));
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        } finally {
+            input.close();
+        }
+    }
+
     private void loadRadarFrame(final boolean showLoading) {
         if (currentPreset == null || frameTimes.isEmpty()) {
             return;
@@ -440,11 +538,11 @@ public class MainActivity extends AppCompatActivity {
 
         byte[] cached = radarDataCache.get(radarKey);
         if (cached != null) {
-            decodeAndDisplayRadarFrame(radarKey, cached, showLoading);
+            decodeAndDisplayRadarFrame(layerGeneration, radarKey, cached, showLoading);
             return;
         }
 
-        fetchRadarFrame(preset, frameTime, showLoading, true);
+        fetchRadarFrame(layerGeneration, preset, frameTime, showLoading, true);
     }
 
     private void prefetchRadarFrames() {
@@ -458,17 +556,18 @@ public class MainActivity extends AppCompatActivity {
         for (int offset = 1; offset < frameTimes.size(); offset++) {
             int forwardIndex = selectedIndex + offset;
             if (forwardIndex < frameTimes.size()) {
-                fetchRadarFrame(preset, frameTimes.get(forwardIndex), false, false);
+                fetchRadarFrame(layerGeneration, preset, frameTimes.get(forwardIndex), false, false);
             }
 
             int backwardIndex = selectedIndex - offset;
             if (backwardIndex >= 0) {
-                fetchRadarFrame(preset, frameTimes.get(backwardIndex), false, false);
+                fetchRadarFrame(layerGeneration, preset, frameTimes.get(backwardIndex), false, false);
             }
         }
     }
 
     private void fetchRadarFrame(
+            final int generation,
             @NonNull final RadarPreset preset,
             @NonNull final Date frameTime,
             final boolean showLoading,
@@ -478,7 +577,7 @@ public class MainActivity extends AppCompatActivity {
         byte[] cached = radarDataCache.get(radarKey);
         if (cached != null) {
             if (updateVisibleLayer) {
-                decodeAndDisplayRadarFrame(radarKey, cached, showLoading);
+                decodeAndDisplayRadarFrame(generation, radarKey, cached, showLoading);
             }
             return;
         }
@@ -491,18 +590,18 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 try {
                     final byte[] frameData = fetchBytes(buildRadarUrl(preset, frameTime));
-                    if (frameData != null) {
+                    if (frameData != null && generation == layerGeneration) {
                         radarDataCache.put(radarKey, frameData);
                     }
                     mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
                             inFlightKeys.remove(radarKey);
-                            if (destroyed) {
+                            if (destroyed || generation != layerGeneration) {
                                 return;
                             }
                             if (radarKey.equals(activeRadarKey) && frameData != null) {
-                                decodeAndDisplayRadarFrame(radarKey, frameData, showLoading);
+                                decodeAndDisplayRadarFrame(generation, radarKey, frameData, showLoading);
                                 return;
                             }
                             if (showLoading && radarKey.equals(activeRadarKey) && frameData != null) {
@@ -515,7 +614,7 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             inFlightKeys.remove(radarKey);
-                            if (destroyed) {
+                            if (destroyed || generation != layerGeneration) {
                                 return;
                             }
                             if (showLoading && radarKey.equals(activeRadarKey)) {
@@ -529,6 +628,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void decodeAndDisplayRadarFrame(
+            final int generation,
             @NonNull final String radarKey,
             @NonNull final byte[] frameData,
             final boolean showLoading
@@ -540,7 +640,7 @@ public class MainActivity extends AppCompatActivity {
                 mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
-                        if (destroyed || !radarKey.equals(activeRadarKey)) {
+                        if (destroyed || generation != layerGeneration || !radarKey.equals(activeRadarKey)) {
                             return;
                         }
                         if (bitmap != null) {
@@ -555,6 +655,16 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void clearRadarCache() {
+        radarDataCache.evictAll();
+        inFlightKeys.clear();
+    }
+
+    private void clearAllCaches() {
+        clearRadarCache();
+        staticBitmapCache.evictAll();
     }
 
     private void ensureSessionToken(
@@ -913,6 +1023,21 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return builder.toString();
+    }
+
+    @NonNull
+    private String sha1(@NonNull String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                builder.append(String.format(Locale.US, "%02x", b & 0xff));
+            }
+            return builder.toString();
+        } catch (Exception ignored) {
+            return Integer.toHexString(value.hashCode());
+        }
     }
 
     private String urlEncode(@NonNull String value) {
