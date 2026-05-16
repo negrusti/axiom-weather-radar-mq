@@ -49,3 +49,4 @@ jobs:
         with:
           name: axiom-weather-radar-mq
           path: app/build/outputs/apk/debug/axiom-weather-radar-mq.apk
+          archive: false
